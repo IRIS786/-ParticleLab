@@ -1,0 +1,101 @@
+import pygame
+import numpy as np
+import sys
+
+# Constants
+WIDTH, HEIGHT = 800, 600
+G = 6.67430e-11  # Gravitational constant
+k = 8.988e9      # Coulomb's constant (N·m²/C²)
+DT = 0.1         # Time step
+
+class Particle:
+    def __init__(self, x, y, mass, charge):
+        self.pos = np.array([x, y], dtype=float)
+        self.vel = np.array([0.0, 0.0], dtype=float)
+        self.mass = mass
+        self.charge = charge
+        self.radius = max(5, int(np.log(mass)))
+
+    def apply_force(self, force):
+        acceleration = force / self.mass
+        self.vel += acceleration * DT
+
+    def update(self):
+        self.pos += self.vel * DT
+
+def calculate_forces(particles):
+    n = len(particles)
+    forces = np.zeros((n, 2))
+    
+    for i in range(n):
+        for j in range(i+1, n):
+            p1, p2 = particles[i], particles[j]
+            r_vec = p2.pos - p1.pos
+            r = np.linalg.norm(r_vec)
+            
+            if r < 1e-10:  # Avoid division by zero
+                continue
+                
+            # Coulomb's law
+            f_coulomb = k * p1.charge * p2.charge / r**2
+            f_dir = r_vec / r
+            
+            # Newton's law of gravitation
+            f_gravity = G * p1.mass * p2.mass / r**2
+            
+            # Total force (signs handled by charge signs)
+            total_force = f_dir * (f_coulomb + f_gravity)
+            
+            forces[i] += total_force
+            forces[j] -= total_force
+            
+    return forces
+
+def main():
+    pygame.init()
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    clock = pygame.time.Clock()
+    
+    particles = [
+        Particle(400, 300, 1e10, 1e-4),  # Central positive particle
+        Particle(500, 300, 1e8, -1e-5)   # Orbiting negative particle
+    ]
+    
+    running = True
+    while running:
+        screen.fill((0, 0, 0))
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 3:  # Right click to add particle
+                    x, y = event.pos
+                    particles.append(Particle(x, y, 1e9, 1e-5))
+        
+        # Physics calculations
+        forces = calculate_forces(particles)
+        for i, particle in enumerate(particles):
+            particle.apply_force(forces[i])
+            particle.update()
+            
+            # Bounce off walls
+            if particle.pos[0] <= 0 or particle.pos[0] >= WIDTH:
+                particle.vel[0] *= -0.9
+            if particle.pos[1] <= 0 or particle.pos[1] >= HEIGHT:
+                particle.vel[1] *= -0.9
+        
+        # Draw particles
+        for particle in particles:
+            color = (255, 0, 0) if particle.charge > 0 else (0, 0, 255)
+            pygame.draw.circle(screen, color, 
+                             particle.pos.astype(int), particle.radius)
+        
+        pygame.display.flip()
+        clock.tick(60)
+        
+    pygame.quit()
+    sys.exit()
+
+if __name__ == "__main__":
+    main()
